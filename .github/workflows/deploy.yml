@@ -1,0 +1,74 @@
+name: deploy
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+      REF: ${{ vars.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Link project
+        run: supabase link --project-ref "$REF"
+      - name: Database
+        run: |
+          sed -i "s#__SUPABASE_URL__#https://$REF.supabase.co#g" supabase/migrations/*.sql
+          supabase db push --linked --include-all
+      - name: Function secrets
+        env:
+          IVR_API_KEY: ${{ secrets.IVR_API_KEY }}
+          IVR_API_BASE_URL: ${{ secrets.IVR_API_BASE_URL }}
+          ADMIN_IVR_CODE: ${{ secrets.ADMIN_IVR_CODE }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          YEMOT_API_KEY: ${{ secrets.YEMOT_API_KEY }}
+          SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+        run: |
+          : > .env.fn
+          for k in IVR_API_KEY IVR_API_BASE_URL ADMIN_IVR_CODE ADMIN_EMAIL GEMINI_API_KEY RESEND_API_KEY YEMOT_API_KEY SITE_URL; do
+            v="${!k}"; [ -n "$v" ] && printf '%s=%s\n' "$k" "$v" >> .env.fn
+          done
+          [ -s .env.fn ] && supabase secrets set --env-file .env.fn --project-ref "$REF"
+          rm -f .env.fn
+      - name: Functions
+        run: supabase functions deploy --project-ref "$REF" --no-verify-jwt --use-api
+
+  site:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --no-audit --no-fund
+      - run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://${{ vars.SUPABASE_PROJECT_REF }}.supabase.co
+          VITE_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+      - run: cp dist/index.html dist/404.html
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - id: deployment
+        uses: actions/deploy-pages@v4
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
