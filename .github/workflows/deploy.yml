@@ -46,10 +46,10 @@ jobs:
           for k in IVR_API_KEY IVR_API_BASE_URL ADMIN_IVR_CODE ADMIN_EMAIL GEMINI_API_KEY RESEND_API_KEY YEMOT_API_KEY SITE_URL; do
             v="${!k}"; [ -n "$v" ] && printf '%s=%s\n' "$k" "$v" >> .env.fn
           done
-          [ -s .env.fn ] && supabase secrets set --env-file .env.fn --project-ref "$REF"
+          [ -s .env.fn ] && supabase secrets set --env-file .env.fn --project-ref "$REF" --yes
           rm -f .env.fn
       - name: Functions
-        run: supabase functions deploy --project-ref "$REF" --no-verify-jwt --use-api
+        run: supabase functions deploy --project-ref "$REF" --no-verify-jwt --use-api --yes
 
   site:
     runs-on: ubuntu-latest
