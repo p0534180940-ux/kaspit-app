@@ -1,0 +1,24 @@
+name: unpack
+on:
+  push:
+    paths: ['kaspit.zip']
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: write
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          unzip -o kaspit.zip
+          rm kaspit.zip
+          git config user.name "kaspit-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add -A
+          git commit -m "unpack kaspit.zip" || true
+          git push
+      - run: gh workflow run deploy.yml --ref main
+        env:
+          GH_TOKEN: ${{ github.token }}
