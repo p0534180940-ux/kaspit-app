@@ -6,7 +6,7 @@ create extension if not exists pg_net;
 create table if not exists public.private_settings (key text primary key, value text not null);
 alter table public.private_settings enable row level security;
 insert into public.private_settings (key, value)
-values ('cron_key', encode(gen_random_bytes(24), 'hex'))
+values ('cron_key', encode(extensions.gen_random_bytes(24), 'hex'))
 on conflict (key) do nothing;
 
 create or replace function public.call_fn(fn text) returns void language plpgsql security definer set search_path = public as $$
