@@ -1,0 +1,44 @@
+{
+ "FixedItem": {
+  "active": true
+ },
+ "GlobalCategoryRule": {
+  "confirmations": 1
+ },
+ "SavingsGoal": {
+  "saved_amount": 0
+ },
+ "Feedback": {
+  "handled": false
+ },
+ "Debt": {
+  "settled": false
+ },
+ "User": {
+  "is_coach": false
+ },
+ "SttState": {
+  "mode": "self"
+ },
+ "IncomingFax": {
+  "status": "unmatched",
+  "transactions_count": 0
+ },
+ "PhoneLog": {
+  "status": "waiting"
+ },
+ "Transaction": {
+  "source": "web",
+  "status": "confirmed"
+ },
+ "UserSettings": {
+  "fixed_entered": false,
+  "visit_count": 0,
+  "tithe_enabled": false,
+  "tithe_percent": 10,
+  "tithe_mode": "all"
+ },
+ "UserTask": {
+  "done": false
+ }
+}

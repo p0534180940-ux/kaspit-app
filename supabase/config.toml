@@ -1,0 +1,26 @@
+project_id = "kaspit"
+
+[functions.tlivrWebhook]
+verify_jwt = false
+[functions.syncPhoneCalls]
+verify_jwt = false
+[functions.dailyNotifications]
+verify_jwt = false
+[functions.syncFixedItems]
+verify_jwt = false
+[functions.sendUserReport]
+verify_jwt = false
+[functions.accountData]
+verify_jwt = false
+[functions.classifyTransaction]
+verify_jwt = false
+[functions.coachApi]
+verify_jwt = false
+[functions.linkIdentity]
+verify_jwt = false
+[functions.pushIvrConfig]
+verify_jwt = false
+[functions.core]
+verify_jwt = false
+[functions.agentChat]
+verify_jwt = false
