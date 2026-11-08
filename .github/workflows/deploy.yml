@@ -30,7 +30,7 @@ jobs:
       - name: Database
         run: |
           sed -i "s#__SUPABASE_URL__#https://$REF.supabase.co#g" supabase/migrations/*.sql
-          supabase db push --linked --include-allsupabase db push --linked --include-all --yes
+          supabase db push --linked --include-all --yes
       - name: Function secrets
         env:
           IVR_API_KEY: ${{ secrets.IVR_API_KEY }}
