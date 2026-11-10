@@ -2,6 +2,7 @@
 // אותו ממשק: createClientFromRequest(req) -> { auth.me, entities, asServiceRole, integrations, functions }
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { makeEntities } from './entityStore.js';
+import * as XLSX from 'npm:xlsx@0.18.5';
 import defaults from './entityDefaults.json' with { type: 'json' };
 
 const URL = Deno.env.get('SUPABASE_URL')!;
@@ -85,7 +86,16 @@ async function fileParts(urls: string[] = []) {
     if (!r.ok) continue;
     const mime = (r.headers.get('content-type') || 'application/octet-stream').split(';')[0];
     const bytes = new Uint8Array(await r.arrayBuffer());
-    parts.push({ inlineData: { mimeType: mime === 'application/octet-stream' && u.endsWith('.wav') ? 'audio/wav' : mime, data: b64(bytes) } });
+    const path = u.split('?')[0].toLowerCase();
+    const isSheet = /spreadsheet|ms-excel|text\/csv|officedocument\.spreadsheetml/.test(mime) || /\.(xlsx|xls|csv)$/.test(path);
+    if (isSheet) {
+      // Gemini לא קורא קבצי אקסל ישירות: ממירים כל גיליון לטקסט CSV
+      const wb = XLSX.read(bytes, { type: 'array', cellDates: true });
+      const text = wb.SheetNames.map((n) => `גיליון: ${n}\n` + XLSX.utils.sheet_to_csv(wb.Sheets[n], { dateNF: 'yyyy-mm-dd' })).join('\n\n');
+      parts.push({ text: `תוכן הקובץ (CSV):\n${text.slice(0, 400000)}` });
+      continue;
+    }
+    parts.push({ inlineData: { mimeType: mime === 'application/octet-stream' && path.endsWith('.wav') ? 'audio/wav' : mime, data: b64(bytes) } });
   }
   return parts;
 }
