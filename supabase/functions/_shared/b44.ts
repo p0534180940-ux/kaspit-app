@@ -3,6 +3,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import { makeEntities } from './entityStore.js';
 import * as XLSX from 'npm:xlsx@0.18.5';
+import { unzipSync, strFromU8 } from 'npm:fflate@0.8.2';
 import defaults from './entityDefaults.json' with { type: 'json' };
 
 const URL = Deno.env.get('SUPABASE_URL')!;
@@ -94,6 +95,19 @@ async function fileParts(urls: string[] = []) {
       const text = wb.SheetNames.map((n) => `גיליון: ${n}\n` + XLSX.utils.sheet_to_csv(wb.Sheets[n], { dateNF: 'yyyy-mm-dd' })).join('\n\n');
       parts.push({ text: `תוכן הקובץ (CSV):\n${text.slice(0, 400000)}` });
       continue;
+    }
+    const isDocx = /wordprocessingml/.test(mime) || path.endsWith('.docx');
+    if (isDocx) {
+      // Gemini לא קורא Word: מחלצים טקסט וטבלאות מתוך document.xml
+      const xml = strFromU8(unzipSync(bytes)['word/document.xml'] || new Uint8Array());
+      const text = xml
+        .replace(/<\/w:tc>/g, '\t').replace(/<\/w:p>/g, '\n').replace(/<w:tab\/>/g, '\t')
+        .replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"');
+      parts.push({ text: `תוכן מסמך ה-Word:\n${text.slice(0, 400000)}` });
+      continue;
+    }
+    if (/msword/.test(mime) || path.endsWith('.doc')) {
+      throw new Error('קובץ Word ישן (.doc) לא נתמך. שמרו אותו כ-docx או PDF ונסו שוב.');
     }
     parts.push({ inlineData: { mimeType: mime === 'application/octet-stream' && path.endsWith('.wav') ? 'audio/wav' : mime, data: b64(bytes) } });
   }
