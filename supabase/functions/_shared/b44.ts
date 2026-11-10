@@ -222,6 +222,38 @@ async function uploadPublic(file: File) {
 const TRANSCRIBE_PROMPT =
   'תמלל את ההקלטה בעברית במדויק. סכומים כתוב בספרות. החזר את התמלול בלבד, בלי הסברים. אם אין דיבור החזר טקסט ריק.';
 
+
+// שמות שדות שאינם באנגלית מוחלפים זמנית (Gemini דוחה אותם)
+function asciiSchema(schema: any) {
+  const map: Record<string, string> = {};
+  let n = 0;
+  const walk = (s: any): any => {
+    if (!s || typeof s !== 'object') return s;
+    const out: any = { ...s };
+    if (s.properties) {
+      out.properties = {};
+      for (const [k, v] of Object.entries(s.properties)) {
+        const safe = /^[A-Za-z_][A-Za-z0-9_]*$/.test(k) ? k : (map[k] = map[k] || `field_${n++}`);
+        if (safe !== k) map[safe] = k;
+        out.properties[safe] = walk(v);
+      }
+      if (s.required) out.required = s.required.map((k: string) => (/^[A-Za-z_][A-Za-z0-9_]*$/.test(k) ? k : map[k]));
+    }
+    if (s.items) out.items = walk(s.items);
+    return out;
+  };
+  const restore = (v: any): any => {
+    if (Array.isArray(v)) return v.map(restore);
+    if (v && typeof v === 'object') {
+      const o: any = {};
+      for (const [k, val] of Object.entries(v)) o[map[k] && k.startsWith('field_') ? map[k] : k] = restore(val);
+      return o;
+    }
+    return v;
+  };
+  return { schema: walk(schema), back: restore };
+}
+
 export const Core = {
   async InvokeLLM({ prompt, response_json_schema, file_urls }: any) {
     const parts = await fileParts(file_urls || []);
@@ -235,13 +267,18 @@ export const Core = {
   async ExtractDataFromUploadedFile({ file_url, json_schema }: any) {
     try {
       const parts = await fileParts([file_url]);
+      // Gemini מקבל רק שמות שדות באנגלית: ממירים שמות כמו "אסמכתא" לשמות זמניים ומחזירים בסוף
+      const { schema, back } = asciiSchema(json_schema);
+      // כמו ב-Base44: סכימה של שורה אחת = מחזירים רשימה של שורות
+      const isRow = schema?.type === 'object' && !Object.values(schema.properties || {}).some((p: any) => p?.type === 'array');
       const output = await gemini({
-        prompt: 'חלץ את הנתונים מהקובץ המצורף לפי המבנה המבוקש. אל תמציא נתונים שאינם בקובץ.',
+        prompt: 'חלץ מהקובץ המצורף את כל השורות/התנועות לפי המבנה המבוקש. אל תדלג על שורות ואל תמציא נתונים שאינם בקובץ. שורות סיכום ויתרה אינן תנועות.',
         parts,
-        schema: json_schema,
+        schema: isRow ? { type: 'array', items: schema } : schema,
       });
-      return { status: 'success', output };
+      return { status: 'success', output: back(output) };
     } catch (e) {
+      console.error('ExtractDataFromUploadedFile failed:', (e as Error).message);
       return { status: 'error', details: (e as Error).message };
     }
   },
