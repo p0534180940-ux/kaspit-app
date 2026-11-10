@@ -132,7 +132,7 @@ function toGeminiSchema(s: any): any {
   return out;
 }
 
-export async function gemini({ prompt, system, parts = [], schema, history }: any) {
+export async function gemini({ prompt, system, parts = [], schema, history, fast }: any) {
   const key = GEMINI_KEY();
   if (!key) throw new Error('GEMINI_API_KEY חסר');
   const contents = history || [{ role: 'user', parts: [{ text: String(prompt || '') }, ...parts] }];
@@ -143,17 +143,34 @@ export async function gemini({ prompt, system, parts = [], schema, history }: an
     body.generationConfig.responseSchema = toGeminiSchema(schema);
   }
   let lastErr = '';
+  // חילוץ מקבצים: בלי שלב "חשיבה" ארוך, כדי לא לעבור את מגבלת הזמן של השרת
+  if (fast) body.generationConfig.thinkingConfig = { thinkingBudget: 0 };
+  const started = Date.now();
   for (const model of MODELS()) {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-      body: JSON.stringify(body),
-    });
+    const left = 140_000 - (Date.now() - started);
+    if (left < 5_000) throw new Error('הניתוח לקח יותר מדי זמן. נסה קובץ קטן יותר (למשל חודש אחד) או ייצוא לאקסל מהבנק.');
+    let r: Response;
+    try {
+      r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(left),
+      });
+    } catch (e) {
+      if ((e as Error).name === 'TimeoutError') throw new Error('הניתוח לקח יותר מדי זמן. נסה קובץ קטן יותר (למשל חודש אחד) או ייצוא לאקסל מהבנק.');
+      throw e;
+    }
     if (r.status === 404) {
       lastErr = `model ${model} not found`;
       continue;
     }
     const j = await r.json();
+    if (!r.ok && body.generationConfig.thinkingConfig && /thinking/i.test(j?.error?.message || '')) {
+      delete body.generationConfig.thinkingConfig; // דגם שלא מאפשר לכבות חשיבה
+      lastErr = j?.error?.message;
+      continue;
+    }
     if (!r.ok) throw new Error(j?.error?.message || `Gemini error ${r.status}`);
     const text = (j.candidates?.[0]?.content?.parts || []).map((p: any) => p.text || '').join('');
     if (!schema) return text;
@@ -275,6 +292,7 @@ export const Core = {
         prompt: 'חלץ מהקובץ המצורף את כל השורות/התנועות לפי המבנה המבוקש. אל תדלג על שורות ואל תמציא נתונים שאינם בקובץ. שורות סיכום ויתרה אינן תנועות.',
         parts,
         schema: isRow ? { type: 'array', items: schema } : schema,
+        fast: true,
       });
       return { status: 'success', output: back(output) };
     } catch (e) {
