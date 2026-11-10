@@ -94,7 +94,9 @@ export function makeEntities(supabase, defaults = {}, { onUser } = {}) {
       async filter(query = {}, sort, limit, skip) {
         const o = parseOpts(sort, limit, skip);
         const rows = await fetchAll(() => applySort(applyFilter(base(), query), o.sort), o.limit, o.skip);
-        return rows.map(rowToObj);
+        const out = rows.map(rowToObj);
+        out.items = out; // תאימות: חלק מהקוד קורא ל-result.items
+        return out;
       },
       async list(sort, limit, skip) {
         return api.filter({}, sort, limit, skip);
@@ -135,7 +137,9 @@ export function makeEntities(supabase, defaults = {}, { onUser } = {}) {
           if (error) throw error;
           out.push(...data);
         }
-        return out.map(rowToObj);
+        const res = out.map(rowToObj);
+        res.items = res;
+        return res;
       },
       async update(id, patch) {
         const { data: cur, error: e1 } = await supabase.from('records').select('data').eq('entity', name).eq('id', id).maybeSingle();
