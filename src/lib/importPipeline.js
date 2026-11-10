@@ -2,6 +2,7 @@ import { base44 } from '@/api/base44Client';
 import { norm, loadRules, loadGlobalRules } from '@/lib/categoryRules';
 import { isSummaryDescription, parseAmount, parseDate, normalizeType, resolveCategory } from '@/lib/importRules';
 import { INCOME_CATEGORIES } from '@/lib/categories';
+import { readPdfStatement } from '@/lib/pdfStatement';
 
 // סכימה שטוחה עם סכום כטקסט — סימני מטבע, פסיקים ומינוס נשמרים כפי שהם בקובץ
 const ROW_SCHEMA = {
@@ -56,6 +57,12 @@ async function upload(file) {
 
 // מחלץ שורות גולמיות מקובץ (אקסל/CSV/PDF) או מתמונת קבלה
 export async function extractRaw(file) {
+  // PDF עם טקסט: קוראים ישירות בדפדפן - מהיר, מדויק ובלי עלות AI
+  const isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+  if (isPdf) {
+    const local = await readPdfStatement(file);
+    if (local?.length) return { receipt: false, raw: local, local: true };
+  }
   const url = await upload(file);
   if (file.type?.startsWith('image/')) {
     const r = await base44.integrations.Core.InvokeLLM({
